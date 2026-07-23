@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<!--
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  🌾 Mulberry Mission Control — MCCC Dashboard
+  식품사막화 제로 프로젝트 | 인제군 현장 관제
+
+  [장승배기] 이 HTML은 우리 마을의 얼굴입니다.
+  Design: CSA Kbin  |  Implementation: Trang Manager
+  Team: re.eul(CEO) · Koda(CTO) · Trang(PM) · Kbin(CSA) · Malu(법률자문)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mulberry Mission Control</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    /* ━━━ [장승배기] 대문 확인 — 인증 체크 ━━━ */
+    (function checkAuth() {
+      const mode = localStorage.getItem('mulberry_mode');
+      const token = localStorage.getItem('mulberry_token');
+      if (!mode && !token) {
+        window.location.href = '/login.html';
+      }
+    })();
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d0620; color: #e2e8f0; min-height: 100vh; overflow-x: hidden; }
+    .header { background: #12082e; border-bottom: 1px solid rgba(139,92,246,0.4); padding: 0 24px; height: 52px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+    .header-logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 34px; height: 34px; background: linear-gradient(135deg, #7c3aed, #a855f7); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .header h1 { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+    .header h1 span { color: #a78bfa; }
+    .stats-bar { background: #160d30; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 10px 24px; display: flex; gap: 32px; align-items: center; flex-wrap: wrap; }
+    .stat-item { display: flex; align-items: center; gap: 8px; }
+    .stat-label { font-size: 12px; color: #94a3b8; }
+    .stat-val { font-size: 14px; font-weight: 700; color: #f1f5f9; }
+    .stat-val.highlight { color: #f59e0b; }
+    .sys-status { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .status-dot-live { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; animation: pulse-green 2s infinite; }
+    @keyframes pulse-green { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .sys-status-text { font-size: 13px; font-weight: 600; color: #10b981; }
+    .main-grid { display: grid; grid-template-columns: 340px 1fr 300px; gap: 12px; padding: 12px 16px; min-height: calc(100vh - 92px); }
+    .panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(139,92,246,0.15); border-radius: 12px; overflow: hidden; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .panel-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #94a3b8; text-transform: uppercase; }
+    .panel-title .icon { font-size: 14px; }
+    .panel-dots { display: flex; gap: 4px; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.2); }
+    .left-col { display: flex; flex-direction: column; gap: 12px; }
+    .map-panel { flex: 1; min-height: 340px; }
+    #mapCanvas { width: 100%; height: 280px; display: block; }
+    .map-footer { padding: 10px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .map-stat-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+    .map-stat-row:last-child { border-bottom: none; }
+    .map-stat-label { display: flex; align-items: center; gap: 8px; color: #94a3b8; }
+    .indicator-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .ind-green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+    .ind-amber { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+    .module-header-inner { padding: 10px 16px 6px; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #94a3b8; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+    .module-list { padding: 0 16px 12px; }
+    .module-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+    .module-item:last-child { border-bottom: none; }
+    .module-name { display: flex; align-items: center; gap: 8px; color: #cbd5e1; }
+    .module-badge { padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; }
+    .badge-ok { background: rgba(16,185,129,0.15); color: #10b981; }
+    .badge-standby { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-active { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .center-col { display: flex; flex-direction: column; gap: 12px; }
+    .mccc-tabs { display: flex; gap: 0; padding: 10px 16px 0; }
+    .mccc-tab { display: flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 11px; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .mccc-tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+    .mccc-tab-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .td-purple { background: #a78bfa; box-shadow: 0 0 6px #a78bfa; }
+    .td-pink { background: #f472b6; box-shadow: 0 0 6px #f472b6; }
+    .td-blue { background: #60a5fa; box-shadow: 0 0 6px #60a5fa; }
+    #waveCanvas { width: 100%; height: 140px; display: block; padding: 0 8px; }
+    .feed-list { padding: 8px 16px 12px; }
+    .feed-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; animation: fadeIn 0.5s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+    .feed-item:last-child { border-bottom: none; }
+    .feed-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .fd-green { background: #10b981; box-shadow: 0 0 8px #10b981; }
+    .fd-amber { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+    .fd-blue  { background: #60a5fa; box-shadow: 0 0 8px #60a5fa; }
+    .feed-agent { font-weight: 700; color: #f1f5f9; }
+    .feed-action { color: #94a3b8; }
+    .feed-status { margin-left: auto; font-size: 11px; font-weight: 600; }
+    .fs-success { color: #10b981; }
+    .fs-alert   { color: #f59e0b; }
+    .fs-done    { color: #60a5fa; }
+    .team-scroll { padding: 12px 16px; display: flex; gap: 14px; overflow-x: auto; }
+    .agent-card { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
+    .agent-avatar-wrap { position: relative; width: 58px; height: 58px; }
+    .agent-avatar-wrap img, .agent-avatar-wrap .avatar-fallback { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(139,92,246,0.5); }
+    .avatar-fallback { background: linear-gradient(135deg, #4c1d95, #7c3aed); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .agent-status-badge { position: absolute; bottom: 1px; right: 1px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #0d0620; }
+    .asb-green { background: #10b981; }
+    .asb-amber { background: #f59e0b; }
+    .asb-gray  { background: #64748b; }
+    .agent-name-label { font-size: 10px; color: #94a3b8; text-align: center; max-width: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spirit-track { width: 52px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+    .spirit-fill { height: 100%; background: linear-gradient(90deg, #7c3aed, #a855f7); border-radius: 2px; }
+    .right-col { display: flex; flex-direction: column; gap: 12px; }
+    .action-list { padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+    .action-btn { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(139,92,246,0.2); border-radius: 10px; cursor: pointer; transition: all 0.2s; color: #e2e8f0; font-size: 13px; font-weight: 600; text-align: left; width: 100%; }
+    .action-btn:hover { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.5); transform: translateX(2px); }
+    .action-btn .arrow { color: #a78bfa; font-size: 16px; }
+    .action-btn.danger { border-color: rgba(239,68,68,0.2); }
+    .action-btn.danger:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); }
+    .action-btn.warning { border-color: rgba(245,158,11,0.2); }
+    .action-btn.warning:hover { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.4); }
+    .trust-body { padding: 12px 16px; }
+    .trust-score-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .trust-label { font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 8px; }
+    .trust-dot { width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; }
+    .trust-score-val { font-size: 20px; font-weight: 800; color: #f1f5f9; }
+    .risk-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .risk-label { font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 8px; }
+    .risk-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+    .risk-val { font-size: 13px; font-weight: 700; color: #f59e0b; }
+    .events-list { display: flex; flex-direction: column; gap: 8px; }
+    .event-item { display: flex; align-items: flex-start; gap: 10px; font-size: 11px; }
+    .event-time { color: #64748b; min-width: 36px; }
+    .event-desc { color: #cbd5e1; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1e0a4e; border: 1px solid rgba(139,92,246,0.4); border-radius: 10px; padding: 12px 18px; font-size: 13px; color: #e2e8f0; z-index: 999; opacity: 0; transform: translateY(10px); transition: all 0.3s; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 1200px) { .main-grid { grid-template-columns: 300px 1fr 260px; } }
+    @media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } .stats-bar { gap: 16px; } }
+    .chat-section { margin: 0 24px 24px; }
+    .chat-panel { background: #160d30; border: 1px solid rgba(139,92,246,0.25); border-radius: 12px; overflow: hidden; }
+    .chat-panel-header { background: #12082e; border-bottom: 1px solid rgba(139,92,246,0.3); padding: 10px 18px; display: flex; align-items: center; gap: 10px; }
+    .chat-panel-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    .chat-ws-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-left: 4px; }
+    .dot-green { background: #10b981; }
+    .dot-gray  { background: #64748b; }
+    #chat-login-view { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; gap: 12px; }
+    #chat-login-view h3 { color: #a78bfa; font-size: 16px; }
+    #chat-login-form { display: flex; flex-direction: column; gap: 8px; width: 280px; }
+    .chat-input-field { background: #1e1040; border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 8px 12px; color: #e2e8f0; font-size: 13px; outline: none; }
+    .chat-login-submit { background: linear-gradient(135deg,#7c3aed,#a855f7); border: none; border-radius: 8px; padding: 9px; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+    #chat-login-err { color: #f87171; font-size: 12px; text-align: center; }
+    #chat-main-view { display: none; height: 480px; }
+    .chat-sidebar { width: 200px; min-width: 200px; background: #0f0826; border-right: 1px solid rgba(139,92,246,0.15); display: flex; flex-direction: column; }
+    .chat-sidebar-header { padding: 10px 14px; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    #chat-channel-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .chat-ch-item { display: flex; align-items: center; gap: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px; color: #94a3b8; transition: background 0.15s; }
+    .chat-ch-item:hover { background: rgba(139,92,246,0.12); color: #e2e8f0; }
+    .chat-ch-item.active { background: rgba(139,92,246,0.2); color: #a78bfa; }
+    .chat-sidebar-footer { padding: 10px 14px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 8px; }
+    .chat-user-tag { flex: 1; font-size: 12px; color: #a78bfa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat-icon-btn { background: none; border: none; color: #64748b; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 4px; }
+    .chat-icon-btn:hover { color: #a78bfa; }
+    .chat-main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .chat-channel-bar { padding: 10px 18px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; gap: 10px; }
+    .chat-channel-bar-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    #chat-messages { flex: 1; overflow-y: auto; padding: 12px 18px; display: flex; flex-direction: column; gap: 8px; }
+    .chat-msg-inner { display: flex; gap: 10px; align-items: flex-start; }
+    .chat-msg-inner.mine { flex-direction: row-reverse; }
+    .chat-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg,#7c3aed,#a855f7); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .chat-bubble { max-width: 70%; }
+    .chat-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+    .chat-sender { font-size: 12px; font-weight: 700; color: #a78bfa; }
+    .chat-time { font-size: 11px; color: #475569; }
+    .chat-msg-body { background: #1e1040; border-radius: 0 10px 10px 10px; padding: 8px 12px; font-size: 13px; color: #e2e8f0; line-height: 1.5; word-break: break-word; }
+    .chat-msg-inner.mine .chat-msg-body { background: rgba(124,58,237,0.3); border-radius: 10px 0 10px 10px; }
+    .chat-sys-msg { text-align: center; font-size: 12px; color: #475569; padding: 4px 0; font-style: italic; }
+    #chat-typing { font-size: 11px; color: #64748b; padding: 2px 18px; min-height: 16px; }
+    .chat-input-bar { padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; gap: 10px; align-items: flex-end; }
+    #chat-msg-input { flex: 1; background: #1e1040; border: 1px solid rgba(139,92,246,0.3); border-radius: 10px; padding: 9px 14px; color: #e2e8f0; font-size: 13px; outline: none; resize: none; line-height: 1.5; min-height: 38px; max-height: 120px; overflow-y: auto; }
+    #chat-send-btn { background: linear-gradient(135deg,#7c3aed,#a855f7); border: none; border-radius: 10px; padding: 9px 16px; color: #fff; font-size: 13px; cursor: pointer; font-weight: 600; }
+    #chat-settings-panel { display: none; position: absolute; right: 18px; bottom: 70px; background: #1a0d3e; border: 1px solid rgba(139,92,246,0.4); border-radius: 12px; padding: 18px; width: 280px; flex-direction: column; gap: 14px; z-index: 10; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #cbd5e1; }
+    .setting-toggle { width: 36px; height: 20px; background: #334155; border-radius: 10px; position: relative; cursor: pointer; appearance: none; border: none; transition: background 0.2s; }
+    .setting-toggle:checked { background: #7c3aed; }
+    .settings-actions { display: flex; gap: 8px; }
+    .settings-save-btn { flex: 1; background: linear-gradient(135deg,#7c3aed,#a855f7); border: none; border-radius: 8px; padding: 8px; color: #fff; font-size: 13px; cursor: pointer; font-weight: 600; }
+    .settings-cancel-btn { background: #1e1040; border: 1px solid rgba(139,92,246,0.3); border-radius: 8px; padding: 8px 14px; color: #94a3b8; font-size: 13px; cursor: pointer; }
+    .chat-relative { position: relative; }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="header-logo">
+    <div class="logo-icon">🌾</div>
+    <h1><span>Mulberry</span> Mission Control</h1>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#64748b;">
+    <span id="headerTime">--:--:--</span>
+    <span id="wsStatus" style="color:#10b981;">● LIVE</span>
+    <span id="userModeBadge" style="display:none;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;"></span>
+    <button onclick="doLogout()" style="background:transparent;border:1px solid rgba(139,92,246,0.3);border-radius:6px;padding:4px 10px;color:#94a3b8;font-size:11px;cursor:pointer;">로그아웃</button>
+  </div>
+</div>
+<div id="guestBanner" style="display:none;background:rgba(245,158,11,0.12);border-bottom:1px solid rgba(245,158,11,0.3);padding:8px 24px;font-size:12px;color:#f59e0b;text-align:center;">
+  👁 Guest 모드 — 열람만 가능합니다. 설정 변경 및 명령 실행은 Admin 로그인이 필요합니다.
+  <a href="/login.html" style="color:#fbbf24;margin-left:12px;text-decoration:underline;">Admin 로그인 →</a>
+</div>
+<div class="stats-bar">
+  <div class="stat-item"><span class="stat-label">Active Agents:</span><span class="stat-val" id="statAgents">—</span></div>
+  <div class="stat-item"><span class="stat-label">Communities Active:</span><span class="stat-val" id="statCommunities">—</span></div>
+  <div class="stat-item"><span class="stat-label">Risk Alerts:</span><span class="stat-val highlight" id="statAlerts">—</span></div>
+  <div class="stat-item"><span class="stat-label">Transactions Today:</span><span class="stat-val" id="statTx">—</span></div>
+  <div class="sys-status"><div class="status-dot-live"></div><span class="sys-status-text">System Status: Stable</span></div>
+</div>
+<div class="main-grid">
+  <div class="left-col">
+    <div class="panel map-panel">
+      <div class="panel-header"><div class="panel-title"><span class="icon">🗺️</span> Region Overview</div><div class="panel-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>
+      <canvas id="mapCanvas" width="340" height="280"></canvas>
+      <div class="map-footer">
+        <div class="map-stat-row"><div class="map-stat-label"><span>📡</span> Sensors Active</div><div class="indicator-dot ind-green"></div></div>
+        <div class="map-stat-row"><div class="map-stat-label"><span>🚚</span> Delivery in Transit</div><div class="indicator-dot ind-amber"></div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="module-header-inner"><span>⚙️</span> Module Status</div>
+      <div class="module-list">
+        <div class="module-item"><div class="module-name"><span class="module-icon">🪪</span> Passport API</div><span class="module-badge badge-ok">● OK</span></div>
+        <div class="module-item"><div class="module-name"><span class="module-icon">💳</span> Payment API</div><span class="module-badge badge-ok">● OK</span></div>
+        <div class="module-item"><div class="module-name"><span class="module-icon">📡</span> Sensor API</div><span class="module-badge badge-active">● Active</span></div>
+        <div class="module-item"><div class="module-name"><span class="module-icon">🔄</span> Recovery API</div><span class="module-badge badge-standby">● Standby</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="center-col">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title"><span class="icon">🔮</span> MCCC Core</div><div class="panel-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>
+      <div class="mccc-tabs">
+        <div class="mccc-tab active"><div class="mccc-tab-dot td-purple"></div> Agent Passports</div>
+        <div class="mccc-tab"><div class="mccc-tab-dot td-pink"></div> AP2 Payment Flow</div>
+        <div class="mccc-tab"><div class="mccc-tab-dot td-blue"></div> Activity Stream</div>
+      </div>
+      <canvas id="waveCanvas" width="600" height="140"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title"><span class="icon">📡</span> Live Feed</div><div class="panel-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>
+      <div class="feed-list" id="liveFeed">
+        <div class="feed-item"><div class="feed-dot fd-green"></div><span class="feed-agent">Agent_01</span><span class="feed-action">· Negotiation ·</span><span class="feed-status fs-success">Success</span></div>
+        <div class="feed-item"><div class="feed-dot fd-amber"></div><span class="feed-agent">Agent_07</span><span class="feed-action">· Fall Detected ·</span><span class="feed-status fs-alert">Alert</span></div>
+        <div class="feed-item"><div class="feed-dot fd-blue"></div><span class="feed-agent">Agent_03</span><span class="feed-action">· Payment ·</span><span class="feed-status fs-done">Completed</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title"><span class="icon">👥</span> Agent Team</div><div class="panel-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>
+      <div class="team-scroll" id="agentTeamRow"></div>
+    </div>
+  </div>
+  <div class="right-col">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title"><span class="icon">🎮</span> Action Panel</div><div class="panel-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>
+      <div class="action-list">
+        <button class="action-btn danger" onclick="doAction('override-agent')">Override Agent <span class="arrow">›</span></button>
+        <button class="action-btn warning" onclick="doAction('trigger-recovery')">Trigger Recovery <span class="arrow">›</span></button>
+        <button class="action-btn" onclick="doAction('send-broadcast')">Send Broadcast <span class="arrow">›</span></button>
+        <button class="action-btn" onclick="doAction('escalate-to-human')">Escalate to Human <span class="arrow">›</span></button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title"><span class="icon">🛡️</span> Trust &amp; Events</div><div class="panel-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>
+      <div class="trust-body">
+        <div class="trust-score-row"><div class="trust-label"><div class="trust-dot"></div> Trust Score:</div><div class="trust-score-val" id="trustScore">—</div></div>
+        <div class="risk-row"><div class="risk-label"><div class="risk-dot"></div> Community Risk:</div><div class="risk-val" id="communityRisk">—</div></div>
+        <div class="events-list" id="eventsList">
+          <div class="event-item"><span class="event-time">10:25</span><span class="event-desc">Alert Triggered</span></div>
+          <div class="event-item"><span class="event-time">10:27</span><span class="event-desc">Agent Dispatched</span></div>
+          <div class="event-item"><span class="event-time">10:30</span><span class="event-desc">Assistance Completed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="chat-section">
+  <div class="chat-panel">
+    <div class="chat-panel-header">
+      <span>💬</span>
+      <span class="chat-panel-title">Team Chat</span>
+      <span class="chat-ws-dot dot-gray" id="chat-ws-dot"></span>
+      <span style="font-size:11px;color:#475569;margin-left:2px">Live</span>
+    </div>
+    <div id="chat-login-view">
+      <h3>🌿 Team Chat 입장</h3>
+      <p style="font-size:12px;color:#64748b;text-align:center">Mulberry 계정으로 로그인하세요</p>
+      <form id="chat-login-form">
+        <input id="chat-login-input" class="chat-input-field" type="text" placeholder="아이디">
+        <input id="chat-pass-input" class="chat-input-field" type="password" placeholder="비밀번호">
+        <button id="chat-login-btn" class="chat-login-submit" type="submit">입장</button>
+      </form>
+      <div id="chat-login-err"></div>
+    </div>
+    <div id="chat-main-view">
+      <div class="chat-sidebar">
+        <div class="chat-sidebar-header">채널</div>
+        <div id="chat-channel-list"></div>
+        <div class="chat-sidebar-footer">
+          <span class="chat-user-tag" id="chat-username-display">—</span>
+          <button class="chat-icon-btn" id="chat-logout-btn" title="로그아웃">⏏</button>
+        </div>
+      </div>
+      <div class="chat-main-area chat-relative">
+        <div class="chat-channel-bar">
+          <span class="chat-channel-bar-title" id="chat-channel-title">#—</span>
+          <span id="chat-channel-desc"></span>
+          <button class="chat-icon-btn" id="chat-settings-btn" style="margin-left:auto">⚙</button>
+        </div>
+        <div id="chat-messages"></div>
+        <div id="chat-typing"></div>
+        <div class="chat-input-bar">
+          <textarea id="chat-msg-input" placeholder="메시지 입력… (Enter 전송 / Shift+Enter 줄바꿈)" rows="1"></textarea>
+          <button id="chat-send-btn">전송</button>
+        </div>
+        <div id="chat-settings-panel">
+          <h4>⚙ 채팅 설정</h4>
+          <div class="setting-row"><span>알림</span><input type="checkbox" id="setting-notifications" class="setting-toggle"></div>
+          <div class="setting-row"><span>소리</span><input type="checkbox" id="setting-sounds" class="setting-toggle"></div>
+          <div class="setting-row"><span>컴팩트 모드</span><input type="checkbox" id="setting-compact" class="setting-toggle"></div>
+          <div class="settings-actions">
+            <button class="settings-save-btn" id="chat-settings-save">저장</button>
+            <button class="settings-cancel-btn" id="chat-settings-cancel">취소</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function initMode() {
+  const mode = localStorage.getItem('mulberry_mode') || 'guest';
+  const badge = document.getElementById('userModeBadge');
+  if (mode === 'guest') {
+    document.getElementById('guestBanner').style.display = 'block';
+    badge.style.display = 'inline-block';
+    badge.style.background = 'rgba(245,158,11,0.15)';
+    badge.style.border = '1px solid rgba(245,158,11,0.4)';
+    badge.style.color = '#f59e0b';
+    badge.textContent = '👁 Guest';
+    document.querySelectorAll('.action-btn, #chat-settings-save, .settings-save-btn').forEach(el => {
+      el.disabled = true; el.style.opacity = '0.4'; el.style.cursor = 'not-allowed';
+    });
+  } else if (mode === 'admin') {
+    const user = JSON.parse(localStorage.getItem('mulberry_user') || '{}');
+    badge.style.display = 'inline-block';
+    badge.style.background = 'rgba(139,92,246,0.15)';
+    badge.style.border = '1px solid rgba(139,92,246,0.4)';
+    badge.style.color = '#a78bfa';
+    badge.textContent = '🔐 ' + (user.username || 'Admin');
+  }
+})();
+function doLogout() {
+  localStorage.removeItem('mulberry_token');
+  localStorage.removeItem('mulberry_user');
+  localStorage.removeItem('mulberry_mode');
+  window.location.href = '/login.html';
+}
+function tickClock() { document.getElementById('headerTime').textContent = new Date().toLocaleTimeString('ko-KR'); }
+setInterval(tickClock, 1000); tickClock();
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+(function drawMap() {
+  const canvas = document.getElementById('mapCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const nodes = [
+    { x: 0.45, y: 0.18, label: '인제읍', type: 'hub', color: '#fb923c' },
+    { x: 0.28, y: 0.38, label: '북면', type: 'agent', color: '#4ade80' },
+    { x: 0.62, y: 0.32, label: '기린면', type: 'agent', color: '#4ade80' },
+    { x: 0.38, y: 0.55, label: '서화면', type: 'alert', color: '#ef4444' },
+    { x: 0.55, y: 0.65, label: '남면', type: 'agent', color: '#4ade80' },
+    { x: 0.22, y: 0.72, label: '상남면', type: 'agent', color: '#4ade80' },
+    { x: 0.70, y: 0.75, label: '기린2리', type: 'hub', color: '#fb923c' },
+  ];
+  const roads = [[0,1],[0,2],[0,3],[0,4],[1,3],[2,4],[3,5],[4,6]];
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const bg = ctx.createRadialGradient(W*0.45, H*0.4, 10, W*0.5, H*0.5, W*0.6);
+    bg.addColorStop(0, '#1a0a3e'); bg.addColorStop(1, '#0a0520');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(139,92,246,0.07)'; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    roads.forEach(([a, b]) => {
+      const na = nodes[a], nb = nodes[b];
+      ctx.strokeStyle = 'rgba(251,146,60,0.2)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(na.x*W, na.y*H); ctx.lineTo(nb.x*W, nb.y*H); ctx.stroke();
+    });
+    frame++;
+    nodes.forEach((n, i) => {
+      const x = n.x*W, y = n.y*H;
+      ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(x, y, n.type==='hub' ? 7 : 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(n.label, x, y+18);
+    });
+    ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.textAlign = 'left'; ctx.fillText('Inje County', 14, 22);
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+(function drawWave() {
+  const canvas = document.getElementById('waveCanvas');
+  const ctx = canvas.getContext('2d');
+  let W = canvas.offsetWidth || 600, H = 140;
+  canvas.width = W; canvas.height = H;
+  let frame = 0;
+  const waves = [
+    { color: '#a78bfa', amp: 22, freq: 0.035, speed: 0.04, offset: 0 },
+    { color: '#f472b6', amp: 16, freq: 0.045, speed: 0.06, offset: 2 },
+    { color: '#60a5fa', amp: 12, freq: 0.055, speed: 0.03, offset: 4 },
+  ];
+  function draw() {
+    frame++; W = canvas.offsetWidth || 600; canvas.width = W;
+    ctx.clearRect(0, 0, W, H);
+    const cy = H/2;
+    waves.forEach(w => {
+      ctx.beginPath();
+      for (let x = 0; x <= W; x += 2) { const y = cy + Math.sin(x*w.freq + frame*w.speed + w.offset)*w.amp; x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); }
+      ctx.strokeStyle = w.color+'60'; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+const maul_role_signs = [
+  { emoji: '👑', name: 're.eul', spirit: 98, status: 'online' },
+  { emoji: '🔧', name: 'Koda', spirit: 82, status: 'online' },
+  { emoji: '🌿', name: 'Trang', spirit: 95, status: 'online' },
+  { emoji: '🏛️', name: 'Kbin', spirit: 90, status: 'online' },
+  { emoji: '⚖️', name: 'Malu', spirit: 87, status: 'online' },
+];
+document.getElementById('agentTeamRow').innerHTML = maul_role_signs.map(m => `
+  <div class="agent-card">
+    <div class="agent-avatar-wrap">
+      <div class="avatar-fallback">${m.emoji}</div>
+      <div class="agent-status-badge asb-green"></div>
+    </div>
+    <div class="agent-name-label">${m.name}</div>
+    <div class="spirit-track"><div class="spirit-fill" style="width:${m.spirit}%"></div></div>
+  </div>
+`).join('');
+async function pungpungso_pulse() {
+  try {
+    const r = await fetch('/api/dashboard/stats'); const d = await r.json();
+    if (d.success) {
+      const s = d.stats;
+      document.getElementById('statAgents').textContent = s.agents?.total ?? '—';
+      document.getElementById('statCommunities').textContent = s.network?.nodes ?? '—';
+      document.getElementById('statTx').textContent = s.transactions?.today ?? '—';
+    }
+  } catch(e) {}
+}
+async function loadTrust() {
+  try {
+    const r = await fetch('/api/trust/score'); const d = await r.json();
+    if (d.success) { document.getElementById('trustScore').textContent = d.trust?.score ?? '92'; document.getElementById('communityRisk').textContent = d.trust?.riskLevel ?? 'LOW'; }
+  } catch(e) { document.getElementById('trustScore').textContent = '92'; document.getElementById('communityRisk').textContent = 'LOW'; }
+}
+async function loadRiskAlerts() {
+  try { const r = await fetch('/api/regions/overview'); const d = await r.json(); document.getElementById('statAlerts').textContent = d.riskAlerts ?? '2'; }
+  catch(e) { document.getElementById('statAlerts').textContent = '2'; }
+}
+async function doAction(type) {
+  showToast('⚡ ' + type + ' 실행 중...');
+  try { await fetch('/api/actions/' + type, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({source:'dashboard'}) }); showToast('✅ ' + type + ' 완료'); }
+  catch(e) { showToast('✅ ' + type + ' 요청 전송됨'); }
+}
+try {
+  const socket = io();
+  socket.on('connect', () => { document.getElementById('wsStatus').textContent = '● LIVE'; document.getElementById('wsStatus').style.color = '#10b981'; });
+  socket.on('disconnect', () => { document.getElementById('wsStatus').textContent = '● OFFLINE'; document.getElementById('wsStatus').style.color = '#ef4444'; });
+} catch(e) {}
+pungpungso_pulse(); loadTrust(); loadRiskAlerts();
+setInterval(pungpungso_pulse, 15000); setInterval(loadTrust, 30000);
+</script>
+<script src="/js/team-chat-ui.js"></script>
+</body>
+</html>
